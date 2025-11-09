@@ -292,11 +292,23 @@ open ./YOLOX_outputs/yolox_tiny_mix_det/track_vis/2025_11_09_16_58_02/palace.mp4
 
 若要進一步執行 GPU 模式（於 Linux / Docker 上），
 可替換成：
-
+--device cpu change --device mps
 ```bash
---device gpu
-```
+python3 tools/demo_track.py video --device mps \
+  -f ./exps/example/mot/yolox_tiny_mix_det.py \
+  -c ./pretrained/bytetrack_tiny_mot17.pth.tar \
+  --path ./videos/palace.mp4 --save_result
 
-並使用對應的 GPU 版權重與驅動。
+```
+可用此測試ＧＰＵ是否開啟
+```
+python3 - <<'EOF'
+import torch
+print("PyTorch 版本:", torch.__version__)
+print("是否支援 MPS:", torch.backends.mps.is_available())
+print("是否可用:", torch.backends.mps.is_built())
+EOF
+
+```
 
 ---
