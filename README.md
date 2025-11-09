@@ -288,7 +288,7 @@ open ./YOLOX_outputs/yolox_tiny_mix_det/track_vis/2025_11_09_16_58_02/palace.mp4
 
 ---
 
-## 📄 附註（GPU 模式）
+## 📄 附註 MAC（GPU 模式）
 
 若要進一步執行 GPU 模式（於 Linux / Docker 上），
 可替換成：
