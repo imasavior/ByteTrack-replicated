@@ -312,3 +312,220 @@ EOF
 ```
 
 ---
+下面是我幫你整理好的 **ByteTrack GPU 部署完整 Markdown 文件**，
+可以直接給教授、放 GitHub 或做你的專案紀錄。
+
+---
+
+# 🚀 ByteTrack (YOLOX + ByteTrack) — GPU Deployment Guide (CUDA 12.2 / PyTorch 2.1 / Ubuntu)
+
+本文件記錄從 **乾淨 VM → RTX 3080 + CUDA 12.2 → ByteTrack 可成功 GPU 推論**
+的完整部署流程，含所有踩雷修復紀錄。
+
+---
+
+# 🖥️ 1. 系統環境
+
+| 項目     | 內容                      |
+| ------ | ----------------------- |
+| GPU    | NVIDIA GeForce RTX 3080 |
+| Driver | 535.161.07              |
+| CUDA   | 12.2（driver API）        |
+| Python | 3.10                    |
+| OS     | Ubuntu (cloud VM)       |
+
+確認 GPU：
+
+```bash
+nvidia-smi
+```
+
+---
+
+# 🧱 2. 建立虛擬環境
+
+```bash
+cd ~/vscode
+python3 -m venv bytetrack_env
+source bytetrack_env/bin/activate
+```
+
+---
+
+# 📦 3. 安裝基礎依賴（compiler / cmake）
+
+YOLOX 需要編譯 C++/CUDA extension：
+
+```bash
+sudo apt update
+sudo apt install -y build-essential gcc g++ make python3-dev cmake
+```
+
+---
+
+# 🔥 4. 安裝 PyTorch CUDA 12.1（支援 Driver 535）
+
+CUDA 12.2 driver 只能使用 cu121 版本 wheel：
+
+```bash
+pip uninstall -y torch torchvision torchaudio
+pip cache purge
+
+pip install torch==2.1.0+cu121 torchvision==0.16.0+cu121 \
+  --index-url https://download.pytorch.org/whl/cu121
+```
+
+確認：
+
+```bash
+python3 - << 'PY'
+import torch
+print("Torch:", torch.__version__)
+print("CUDA available:", torch.cuda.is_available())
+print("GPU:", torch.cuda.get_device_name(0))
+PY
+```
+
+---
+
+# 📦 5. 修復 NumPy / OpenCV 相容性
+
+⚠️ NumPy 2.x 與 OpenCV、YOLOX 不相容，因此要降級：
+
+```bash
+pip uninstall -y numpy opencv-python opencv-python-headless
+pip install numpy==1.26.4
+pip install opencv-python-headless==4.8.1.78
+```
+
+測試：
+
+```bash
+python3 - << 'PY'
+import numpy, cv2
+print("numpy:", numpy.__version__)
+print("opencv:", cv2.__version__)
+PY
+```
+
+---
+
+# 📚 6. 安裝 ByteTrack 依賴（修正版 requirements）
+
+不要使用舊 repo 內 onnx==1.8.1（無法支援 Python 3.10）
+
+先編輯 requirements.txt：
+
+```txt
+numpy==1.26.4
+opencv-python-headless==4.8.1.78
+torch>=2.0
+torchvision
+loguru
+scikit-image
+tqdm
+Pillow
+thop
+ninja
+tabulate
+tensorboard
+lap
+motmetrics
+filterpy
+h5py
+
+onnx==1.12.0
+onnxruntime==1.14.1
+onnx-simplifier==0.4.10
+```
+
+安裝：
+
+```bash
+pip install -r requirements.txt --no-deps
+pip install coloredlogs flatbuffers packaging
+pip install -U scipy
+pip install ninja
+```
+
+---
+
+# 🧩 7. 安裝 COCO API（ByteTrack 需要）
+
+```bash
+pip install cython_bbox
+pip install 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI' --no-build-isolation
+```
+
+---
+
+# 🏗️ 8. 安裝 ByteTrack 本體（build YOLOX kernel）
+
+```bash
+cd ~/vscode/ByteTrack
+pip install -e . --no-build-isolation
+```
+
+測試：
+
+```bash
+python3 -c "import yolox; print('✅ ByteTrack setup OK')"
+```
+
+---
+
+# 📥 9. 下載預訓練模型（正確版 25MB）
+
+⚠️ 你之前下載到的是 9 bytes 的壞檔，此為正確連結：
+
+```bash
+mkdir -p pretrained
+cd pretrained
+
+wget https://github.com/ifzhang/ByteTrack/releases/download/0.1.1/bytetrack_tiny_mot17.pth.tar
+```
+
+確認：
+
+```bash
+ls -lh
+# => 應該約 22–25 MB
+```
+
+---
+
+# 🎬 10. 執行 ByteTrack Demo（GPU 推論）
+
+> 🔥 CPU 會非常非常慢，所以務必用 GPU。
+
+```bash
+cd ~/vscode/ByteTrack
+python3 tools/demo_track.py video --device gpu \
+  -f ./exps/example/mot/yolox_tiny_mix_det.py \
+  -c ./pretrained/bytetrack_tiny_mot17.pth.tar \
+  --path ./videos/palace.mp4 --save_result
+```
+
+輸出會在：
+
+```
+./YOLOX_outputs/yolox_tiny_mix_det/track_vis/YYYY_MM_DD_HH_MM_SS/palace.mp4
+```
+
+---
+
+# 🎉 11. 你成功了！
+
+GPU 已成功推論 YOLOX + ByteTrack。
+整個流程包含：
+
+* CUDA + PyTorch 相容性修復
+* NumPy / OpenCV ABI 衝突修復
+* YOLOX C++ kernel build
+* ByteTrack 依賴調整
+* 壞掉的模型檔重新下載
+* CPU 卡住 → 改 GPU 正常運行
+
+這份文件可以完整說明你部署的過程。
+
+---
